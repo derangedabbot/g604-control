@@ -587,6 +587,13 @@ class App:
         return OFF_BUTTONS if self.var_layer.get() == "обычный" else OFF_ALT_BUTTONS
 
     def reload(self):
+        current = self.profile
+        mine = [k for k in self.pending if k[0] == current]
+        if mine and not messagebox.askokcancel(
+                "Есть несохранённые изменения",
+                f"Для профиля {current} не записано изменений: {len(mine)}.\n"
+                "Перечитать и потерять их? (изменения других профилей сохранятся)"):
+            return
         if not self.pp:
             self.connect()
         if not self.pp:
@@ -594,7 +601,8 @@ class App:
         try:
             self.sector = bytearray(self.pp.read_sector(self.profile, SECTOR_SIZE))
             self.sector6 = bytearray(self.pp.read_sector(SECTOR_MACROS, SECTOR_SIZE))
-            self.pending.clear()
+            for key in mine:
+                self.pending.pop(key, None)
             self.header_dirty = False
             self._fill_header()
             self._fill_tree()
@@ -611,9 +619,10 @@ class App:
         self.var_hz.set(str(h["hz"] or 1000))
 
     def refresh_layer(self):
-        self.pending.clear()
         self._fill_tree()
-        self.say(f"Слой «{self.var_layer.get()}» профиля {self.profile}.")
+        pending = len(self.pending)
+        tail = f" Не записано изменений: {pending}." if pending else ""
+        self.say(f"Слой «{self.var_layer.get()}» профиля {self.profile}.{tail}")
 
     def parse_layer(self, sector: bytes, offset: int) -> list[dict]:
         return [decode_entry(bytes(sector[offset + i * 4:offset + i * 4 + 4])) for i in range(16)]
@@ -622,7 +631,7 @@ class App:
         self.entries = self.parse_layer(self.sector, self.layer_offset)
         self.tree.delete(*self.tree.get_children())
         for i, name in enumerate(CONTROLS):
-            key = (self.layer_offset, i)
+            key = (self.profile, self.layer_offset, i)
             if key in self.pending and self.pending[key]["type"] == "macro":
                 act = "★ макрос: " + self._combos_text(self.pending[key]["combos"])
             elif key in self.pending:
@@ -630,6 +639,8 @@ class App:
             else:
                 act = entry_text(self.entries[i], self.sector6) if i < len(self.entries) else "—"
             self.tree.insert("", "end", iid=str(i), values=(name, act))
+        n = len(self.pending)
+        self.root.title(f"G604 Control — не записано изменений: {n}" if n else "G604 Control")
 
     @staticmethod
     def _combos_text(combos: list[dict]) -> str:
@@ -646,7 +657,7 @@ class App:
             return
         i = int(sel[0])
         self.sel_lbl.config(text=CONTROLS[i])
-        key = (self.layer_offset, i)
+        key = (self.profile, self.layer_offset, i)
         if key in self.pending and self.pending[key]["type"] == "macro":
             self.var_kind.set("macro")
             self.current_macro = list(self.pending[key]["combos"])
@@ -695,7 +706,7 @@ class App:
             messagebox.showinfo("G604 Control", "Сначала выберите кнопку в списке.")
             return
         i = int(sel[0])
-        key = (self.layer_offset, i)
+        key = (self.profile, self.layer_offset, i)
         k = self.var_kind.get()
         if k == "key":
             mods = sum(m for n, m in MODS.items() if self.mod_vars[n].get())
@@ -754,13 +765,20 @@ class App:
             bk = Path.home() / "Cursor" / "g604-control" / f"backup-before-write-{datetime.now():%Y%m%d-%H%M%S}.json"
             bk.write_text(json.dumps(dump, indent=2))
 
-            raw1 = bytearray(self.sector)
             raw6 = bytearray(self.sector6)
-            entries = [bytes(raw1[OFF_BUTTONS + i * 4:OFF_BUTTONS + i * 4 + 4]) for i in range(16)]
+            buffers: dict[int, bytearray] = {}
 
-            for (offset, i), change in self.pending.items():
+            def buffer_for(prof: int) -> bytearray:
+                if prof not in buffers:
+                    buffers[prof] = (bytearray(self.sector) if prof == self.profile
+                                     else bytearray(self.pp.read_sector(prof, SECTOR_SIZE)))
+                return buffers[prof]
+
+            for (prof, offset, i), change in self.pending.items():
+                raw1 = buffer_for(prof)
                 pos = offset + i * 4
                 if change["type"] == "macro":
+                    entries = [bytes(raw1[OFF_BUTTONS + j * 4:OFF_BUTTONS + j * 4 + 4]) for j in range(16)]
                     combos = [{"mods": c["mods"], "key": KEYS[c["key"]], "delay": c["delay"]}
                               for c in change["combos"]]
                     blob = build_macro(combos)
@@ -771,15 +789,17 @@ class App:
                     if start + len(blob) < SECTOR_SIZE:
                         raw6[start + len(blob)] = macros.END
                     raw1[pos:pos + 4] = encode_entry("macro", offset=start)
-                    entries[i] = bytes(raw1[pos:pos + 4])
+                    self.say(f"Макрос для профиля {prof}, {CONTROLS[i]} размещён с {start:#04x}")
                 else:
                     raw1[pos:pos + 4] = change["bytes"]
 
             if bytes(raw6) != bytes(self.sector6):
                 self.say("Пишу сектор макросов…")
                 self.pp.write_sector(SECTOR_MACROS, bytes(raw6), SECTOR_SIZE)
-            self.say("Пишу профиль…")
-            self.pp.write_sector(self.profile, bytes(raw1), SECTOR_SIZE)
+
+            for prof in sorted(buffers):
+                self.say(f"Пишу профиль {prof}…")
+                self.pp.write_sector(prof, bytes(buffers[prof]), SECTOR_SIZE)
 
             self.sector = bytearray(self.pp.read_sector(self.profile, SECTOR_SIZE))
             self.sector6 = bytearray(self.pp.read_sector(SECTOR_MACROS, SECTOR_SIZE))
