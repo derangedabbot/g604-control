@@ -748,6 +748,20 @@ class App:
         self.say("Уровни DPI и частота обновлены в памяти — нажмите «ЗАПИСАТЬ В МЫШЬ».")
 
     # ---------- запись
+    @staticmethod
+    def _rotate_backups(keep: int = 20) -> int:
+        """Оставляет последние keep авто-бэкапов, старые удаляет."""
+        folder = Path.home() / "Cursor" / "g604-control" / "backups"
+        files = sorted(folder.glob("backup-before-write-*.json"))
+        removed = 0
+        for old in files[:-keep] if len(files) > keep else []:
+            try:
+                old.unlink()
+                removed += 1
+            except OSError:
+                pass
+        return removed
+
     def write(self):
         if not self.pp:
             messagebox.showerror("G604 Control", "Мышь не найдена — запись невозможна.")
@@ -762,8 +776,11 @@ class App:
         try:
             self.say("Сохраняю дамп-бэкап…")
             dump = hid._dump_connected(self.pp)
-            bk = Path.home() / "Cursor" / "g604-control" / f"backup-before-write-{datetime.now():%Y%m%d-%H%M%S}.json"
+            backup_dir = Path.home() / "Cursor" / "g604-control" / "backups"
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            bk = backup_dir / f"backup-before-write-{datetime.now():%Y%m%d-%H%M%S}.json"
             bk.write_text(json.dumps(dump, indent=2))
+            removed = self._rotate_backups()
 
             raw6 = bytearray(self.sector6)
             buffers: dict[int, bytearray] = {}
@@ -811,7 +828,8 @@ class App:
                 self.var_live_dpi.set(str(dpi_now))
             self._fill_header()
             self._fill_tree()
-            self.say(f"Записано и проверено. DPI возвращён на {dpi_now}. Бэкап: {bk.name}")
+            tail = f" Удалено старых бэкапов: {removed}." if removed else ""
+            self.say(f"Записано и проверено. DPI возвращён на {dpi_now}.{tail}")
         except Exception as e:  # noqa: BLE001
             self.say(f"Ошибка записи: {e}")
             messagebox.showerror("G604 Control", f"Запись не удалась:\n{e}")
