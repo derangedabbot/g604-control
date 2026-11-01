@@ -1,0 +1,30 @@
+# сборка и окружение
+.build-venv/
+__pycache__/
+*.pyc
+build/
+dist/
+
+# собранное приложение (собирается через ./build.sh)
+G604 Control.app
+
+# бэкапы памяти мыши — личные дампы устройства
+backups/
+*.log
+
+# черновики и материалы, которые не выкладываются
+dev/G604 Control (скрипт).app
+dev/g604-onboard.py
+dev/g604probe
+dev/draw_diagram
+dev/make_icon
+dev/icon-1024.png
+dev/icon.iconset/
+dev/ref/
+dev/driver-logitech.c
+dev/driver-hidpp20.c
+dev/hidpp20.c
+dev/hidpp20.h
+
+# macOS
+.DS_Store
