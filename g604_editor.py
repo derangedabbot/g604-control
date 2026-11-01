@@ -31,6 +31,7 @@ from tkinter import ttk, messagebox, filedialog
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import hidpp_g604 as hid
 import macros
+from bluetooth_check import bluetooth_mouse_present
 
 SECTOR_SIZE = 255
 SECTOR_MACROS = 6
@@ -546,7 +547,9 @@ class App:
     # ---------- устройство
     def connect(self):
         last = None
-        for attempt in range(3):
+        bt_only = bluetooth_mouse_present(hid.Hidpp._load_hidapi)
+        attempts = 1 if bt_only else 3
+        for attempt in range(attempts):
             try:
                 self.pp = hid.Hidpp()
                 self.pp.open()
@@ -566,7 +569,11 @@ class App:
                 self.root.update_idletasks()
                 time.sleep(1.0)
         self.lbl_dev.config(text="Устройство: не найдено")
-        self.say(f"Мышь не найдена — пошевелите её и нажмите «Перечитать». Причина: {last}")
+        if bluetooth_mouse_present(hid.Hidpp._load_hidapi):
+            self.lbl_dev.config(text="G604 подключена по Bluetooth — настройка недоступна")
+            self.say("Настройка по Bluetooth запрещена macOS. Подключите приёмник или кабель.")
+        else:
+            self.say(f"Мышь не найдена — пошевелите её и нажмите «Перечитать». Причина: {last}")
 
     @property
     def profile(self) -> int:
