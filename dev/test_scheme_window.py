@@ -5,7 +5,7 @@ from pathlib import Path
 # Проверка окна схемы: ровно тот код, что в приложении
 root = tk.Tk()
 root.title("Схема кнопок G604")
-path = Path("/Users/antonp/Cursor/g604-control/diagram.png")
+path = Path(__file__).resolve().parent.parent / "diagram.png"
 img = tk.PhotoImage(file=str(path))
 factor = max(1, round(img.width() / 980))
 if factor > 1:

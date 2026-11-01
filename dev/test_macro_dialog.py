@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 import tkinter as tk
 
-sys.path.insert(0, "/Users/antonp/Cursor/g604-control")
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import g604_editor as g
 
 root = tk.Tk()
