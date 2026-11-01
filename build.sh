@@ -19,6 +19,10 @@ rm -rf build dist
     g604_editor.py
 
 rm -rf build
+rm -rf "G604 Control.app"
 cp -R "dist/G604 Control.app" "G604 Control.app"
 rm -rf dist
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION:-0.5}" \
+    "G604 Control.app/Contents/Info.plist" 2>/dev/null || true
+codesign --force --deep -s - "G604 Control.app" >/dev/null 2>&1 || true
 echo "Готово: G604 Control.app"
