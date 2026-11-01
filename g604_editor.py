@@ -413,6 +413,9 @@ class App:
         ttk.Combobox(row2, textvariable=self.var_hz, width=6, state="readonly",
                      values=["125", "250", "500", "1000"]).pack(side="left", padx=2)
         ttk.Button(row2, text="Применить", command=self.apply_header).pack(side="right")
+        ttk.Label(dpi, foreground="#777",
+                  text="При включении мыши (и после замены батарейки) она берёт уровень 1, "
+                       "а не активный — держите в первом уровне рабочий DPI.").pack(anchor="w", pady=(6, 0))
 
         body = ttk.Frame(self.root, padding=(10, 8))
         body.pack(fill="both", expand=True)
